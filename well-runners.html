@@ -1,0 +1,849 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Well Runners</title>
+<style>
+  :root {
+    --yellow: #FFC907;
+    --blue: #2E9DF7;
+    --navy: #00334E;
+    --cream: #F7EFDD;
+  }
+  
+  body, html {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    background-color: var(--navy);
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    touch-action: manipulation; /* Prevent double-tap zoom on mobile */
+    display: flex;
+    justify-content: center;
+    overflow: hidden; /* Prevent scrolling */
+  }
+
+  #game-container {
+    width: 100%;
+    max-width: 500px; /* Mobile width constraint for desktop */
+    height: 100%;
+    background-color: var(--cream);
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 0 20px rgba(0,0,0,0.5);
+  }
+
+  /* HUD */
+  #hud {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    padding: 15px 20px;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    z-index: 10;
+    background: linear-gradient(to bottom, var(--cream) 70%, transparent);
+  }
+
+  .hud-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: bold;
+    color: var(--navy);
+    font-size: 18px;
+  }
+
+  #water-meter-container {
+    width: 100%;
+    height: 20px;
+    background-color: #ddd;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 2px solid var(--navy);
+  }
+
+  #water-meter-fill {
+    height: 100%;
+    width: 100%;
+    background-color: var(--blue);
+    transition: width 0.1s linear, background-color 0.2s;
+  }
+
+  #reset-button-ingame {
+    background: var(--yellow);
+    border: 2px solid var(--navy);
+    color: var(--navy);
+    font-weight: bold;
+    padding: 5px 10px;
+    border-radius: 5px;
+    cursor: pointer;
+  }
+
+  /* Game Area (Lanes) */
+  #lanes {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+  }
+
+  .lane {
+    flex: 1;
+    border-right: 2px dashed rgba(0, 51, 78, 0.1);
+    position: relative;
+    cursor: pointer; /* Suggests it can be tapped */
+  }
+  
+  .lane:last-child {
+    border-right: none;
+  }
+
+  /* Player */
+  #player {
+    position: absolute;
+    bottom: 200px; /* Fixed vertical position from bottom */
+    width: 50px;
+    height: 50px;
+    background-color: var(--navy);
+    border-radius: 50%;
+    transform: translateX(-50%);
+    transition: left 0.15s ease-out; /* Smooth lane switching */
+    z-index: 5;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 30px;
+    box-shadow: 0 4px 0 rgba(0,0,0,0.2);
+  }
+
+  /* Tsunami */
+  #tsunami {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 0%;
+    background: linear-gradient(to top, rgba(34, 139, 34, 0.9), rgba(50, 205, 50, 0.6));
+    z-index: 8;
+    transition: height 0.2s linear;
+    pointer-events: none;
+  }
+
+  /* Items (Droplets / Pipes) */
+  .item {
+    position: absolute;
+    width: 40px;
+    height: 40px;
+    transform: translateX(-50%);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 30px;
+    z-index: 4;
+  }
+
+  /* Controls (Mobile bottom buttons) */
+  #controls {
+    position: absolute;
+    bottom: 15px;
+    left: 0;
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    padding: 0 30px;
+    box-sizing: border-box;
+    z-index: 10;
+  }
+
+  .control-btn {
+    width: 60px;
+    height: 60px;
+    background-color: rgba(255, 201, 7, 0.9); /* Yellow */
+    border: 3px solid var(--navy);
+    border-radius: 50%;
+    font-size: 24px;
+    color: var(--navy);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    user-select: none;
+    box-shadow: 0 4px 0 var(--navy);
+  }
+  
+  .control-btn:active {
+    transform: translateY(4px);
+    box-shadow: 0 0 0 var(--navy);
+  }
+
+  /* Screens (Title & Game Over) */
+  .screen {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(247, 239, 221, 0.95); /* Cream with opacity */
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 20;
+    text-align: center;
+    padding: 20px;
+    box-sizing: border-box;
+  }
+
+  .hidden {
+    display: none !important;
+  }
+
+  h1 {
+    color: var(--navy);
+    margin-bottom: 10px;
+    font-size: 42px;
+  }
+
+  h2 {
+    color: var(--blue);
+  }
+
+  button.primary {
+    background-color: var(--yellow);
+    color: var(--navy);
+    border: 3px solid var(--navy);
+    padding: 15px 40px;
+    font-size: 24px;
+    font-weight: bold;
+    border-radius: 10px;
+    cursor: pointer;
+    margin-top: 30px;
+    box-shadow: 4px 4px 0px var(--navy);
+    transition: transform 0.1s, box-shadow 0.1s;
+  }
+
+  button.primary:active {
+    transform: translate(4px, 4px);
+    box-shadow: 0px 0px 0px var(--navy);
+  }
+
+  /* Floating Feedback Text */
+  .feedback {
+    position: absolute;
+    color: var(--yellow);
+    font-weight: bold;
+    font-size: 24px;
+    pointer-events: none;
+    z-index: 15;
+    text-shadow: 2px 2px 0px var(--navy);
+    animation: floatUpFade 1s forwards;
+  }
+
+  .feedback-milestone {
+    color: var(--blue);
+    font-size: 36px;
+    top: 30%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    animation: pulseFade 2s forwards;
+  }
+
+  @keyframes floatUpFade {
+    0% { opacity: 1; transform: translateY(0); }
+    100% { opacity: 0; transform: translateY(-50px); }
+  }
+
+  @keyframes pulseFade {
+    0% { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
+    15% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
+    85% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+    100% { opacity: 0; transform: translate(-50%, -50%) scale(1); }
+  }
+
+  /* Confetti Particle */
+  .confetti {
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    z-index: 11;
+    animation: confettiFall 2s forwards;
+  }
+
+  @keyframes confettiFall {
+    0% { transform: translateY(-10px) rotate(0deg); opacity: 1; }
+    100% { transform: translateY(300px) rotate(720deg); opacity: 0; }
+  }
+
+  /* Title Screen Mockup Styles */
+  #title-screen {
+    justify-content: flex-start;
+    padding: 0;
+  }
+  
+  .ts-jerrycan-img {
+    width: 60px;
+    height: auto;
+    margin: 0 auto 30px auto;
+    display: block;
+  }
+
+  .ts-title {
+    font-size: 46px;
+    color: var(--navy);
+    line-height: 1.1;
+    letter-spacing: 2px;
+    margin: 0 0 20px 0;
+  }
+
+  .ts-subtitle {
+    font-size: 11px;
+    letter-spacing: 3px;
+    color: #88aebf;
+    font-family: monospace;
+    text-transform: uppercase;
+    margin-bottom: 30px;
+  }
+
+  .ts-character-box {
+    width: 220px;
+    height: 220px;
+    border: 2px dashed #88aebf;
+    margin: 0 auto;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: #88aebf;
+    font-size: 12px;
+    font-family: monospace;
+    margin-bottom: 40px;
+  }
+
+  .ts-play-btn {
+    background-color: var(--navy);
+    color: white;
+    width: 80%;
+    max-width: 300px;
+    margin: 0 auto 50px auto;
+    padding: 20px;
+    border: none;
+    font-size: 18px;
+    font-weight: bold;
+    letter-spacing: 4px;
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 15px;
+  }
+
+  .ts-footer {
+    margin-bottom: 20px;
+  }
+
+  .ts-footer-text {
+    font-size: 10px;
+    color: #b0c4de;
+    letter-spacing: 2px;
+    margin-bottom: 5px;
+    font-family: monospace;
+  }
+
+  .ts-charity-logo {
+    background-color: var(--yellow);
+    color: var(--navy);
+    padding: 10px 20px;
+    font-weight: bold;
+    font-size: 14px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    border: 2px solid var(--navy);
+  }
+
+  .ts-bottom-nav {
+    width: 100%;
+    height: 60px;
+    background-color: var(--cream);
+    display: flex;
+    border-top: 3px solid var(--navy);
+    margin-top: auto;
+  }
+  .ts-bottom-nav > div {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    font-size: 10px;
+    font-weight: bold;
+    color: var(--navy);
+    border-right: 2px solid var(--navy);
+    line-height: 1.4;
+  }
+  .ts-bottom-nav > div:last-child {
+    border-right: none;
+  }
+  .ts-bottom-nav > div:first-child {
+    background-color: var(--navy);
+    color: white;
+  }
+</style>
+</head>
+<body>
+
+<div id="game-container">
+  <!-- HUD (Heads Up Display) -->
+  <div id="hud">
+    <div class="hud-row">
+      <div id="score-display">Score: 0</div>
+      <div id="distance-display">Distance: 0m</div>
+      <button id="reset-button-ingame">Reset</button>
+    </div>
+    <div id="water-meter-container">
+      <div id="water-meter-fill"></div>
+    </div>
+  </div>
+
+  <!-- Background Lanes -->
+  <div id="lanes">
+    <div class="lane" data-lane="0"></div>
+    <div class="lane" data-lane="1"></div>
+    <div class="lane" data-lane="2"></div>
+  </div>
+
+  <!-- Player Element -->
+  <div id="player" style="display: flex; align-items: center; justify-content: center;">
+    🏃<img src="img/water-can-transparent.png" alt="jerrycan" style="height: 35px; margin-left: -5px;">
+  </div>
+
+  <!-- Tsunami Effect -->
+  <div id="tsunami"></div>
+
+  <!-- Title Screen -->
+  <div id="title-screen" class="screen">
+    <div style="flex-grow: 1; display: flex; flex-direction: column; justify-content: center; width: 100%; margin-top: 40px;">
+      <img src="img/water-can-transparent.png" class="ts-jerrycan-img" alt="Jerry Can Logo">
+      <h1 class="ts-title">WELL<br>RUNNERS</h1>
+      <div class="ts-subtitle">DELIVER WATER - OUTRUN POLLUTION</div>
+      
+      <div class="ts-character-box">
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 10px;">
+          <div style="font-size: 40px;">🏃</div>
+          <img src="img/water-can-transparent.png" style="width: 50px; height: auto;" alt="Jerry can item">
+        </div>
+      </div>
+
+      <button class="ts-play-btn" id="play-button">▶ PLAY</button>
+      
+      <div class="ts-footer">
+        <div class="ts-footer-text">IN PARTNERSHIP WITH</div>
+        <div class="ts-charity-logo">
+          <img src="img/cw_logo_horizontal.png" alt="charity: water" style="height: 24px;">
+        </div>
+      </div>
+    </div>
+    
+    <div class="ts-bottom-nav">
+      <div>⌂<br>HOME</div>
+      <div>▤<br>RANK</div>
+      <div>👁<br>LOOK</div>
+      <div>⚙<br>OPTS</div>
+    </div>
+  </div>
+
+  <!-- Game Over Screen -->
+  <div id="game-over-screen" class="screen hidden">
+    <h1>Game Over</h1>
+    <h2>Out of water!</h2>
+    <p id="final-stats" style="color: var(--navy); font-size: 24px; font-weight: bold; margin: 20px 0;"></p>
+    <div style="display: flex; gap: 15px; flex-direction: column; width: 80%;">
+      <button class="primary" id="play-again-button" style="margin-top: 0;">Play Again</button>
+      <button class="secondary" id="home-button" style="background-color: transparent; border: 3px solid var(--navy); color: var(--navy); padding: 15px; font-size: 20px; font-weight: bold; border-radius: 10px; cursor: pointer;">Title Screen</button>
+    </div>
+  </div>
+
+  <!-- Mobile Controls -->
+  <div id="controls">
+    <div class="control-btn" id="btn-left">◀</div>
+    <div class="control-btn" id="btn-right">▶</div>
+  </div>
+</div>
+
+<script>
+/**
+ * WELL RUNNERS - Core Logic
+ */
+
+// --- 1. GAME STATE ---
+let isPlaying = false;
+let score = 0;
+let timeSurvived = 0;
+let waterMeter = 100;
+let playerLane = 1; // 0 = left, 1 = center, 2 = right
+
+let items = []; // Holds active falling items on screen
+let lastTime = 0; // Timestamp for deltaTime calculation
+let spawnTimer = 0; // Accumulates time until next item spawn
+let animationFrameId = null;
+
+let nextMilestone = 50;
+
+// Tuning Variables (Difficulty Ramp)
+let currentSpawnInterval = 1000; // milliseconds between spawns
+let currentBaseSpeed = 300;      // pixels per second falling speed
+const MIN_SPAWN_INTERVAL = 350;  // fastest spawn rate
+const MAX_BASE_SPEED = 700;      // max falling speed
+
+// --- 2. DOM ELEMENTS ---
+const gameContainer = document.getElementById('game-container');
+const playerEl = document.getElementById('player');
+const scoreEl = document.getElementById('score-display');
+const distanceEl = document.getElementById('distance-display');
+const waterMeterFill = document.getElementById('water-meter-fill');
+const titleScreen = document.getElementById('title-screen');
+const gameOverScreen = document.getElementById('game-over-screen');
+const finalStats = document.getElementById('final-stats');
+
+// Lane positions as percentages of the container width (center of each lane)
+const LANE_POSITIONS = [16.66, 50, 83.33];
+
+// --- 3. INITIALIZATION & INPUT ---
+function init() {
+  // Bind UI buttons
+  document.getElementById('play-button').addEventListener('click', startGame);
+  document.getElementById('play-again-button').addEventListener('click', startGame);
+  document.getElementById('home-button').addEventListener('click', goHome);
+  document.getElementById('reset-button-ingame').addEventListener('click', () => {
+    if (isPlaying) endGame();
+  });
+
+  // Keyboard controls
+  window.addEventListener('keydown', (e) => {
+    if (!isPlaying) return;
+    if (e.key === 'ArrowLeft') movePlayer(-1);
+    if (e.key === 'ArrowRight') movePlayer(1);
+  });
+
+  // Mobile on-screen buttons
+  document.getElementById('btn-left').addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    if (isPlaying) movePlayer(-1);
+  });
+  document.getElementById('btn-right').addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    if (isPlaying) movePlayer(1);
+  });
+
+  // Tap/Click directly on lanes
+  document.querySelectorAll('.lane').forEach(laneEl => {
+    laneEl.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      if (!isPlaying) return;
+      const clickedLane = parseInt(laneEl.getAttribute('data-lane'));
+      playerLane = clickedLane;
+      updatePlayerPosition();
+    });
+  });
+
+  // Position player initially
+  updatePlayerPosition();
+}
+
+// --- 4. GAME LIFECYCLE ---
+function startGame() {
+  // Reset all state variables
+  isPlaying = true;
+  score = 0;
+  timeSurvived = 0;
+  waterMeter = 100;
+  playerLane = 1; // Start in center
+  
+  // Clear any existing items
+  items.forEach(item => item.element.remove());
+  items = [];
+  
+  spawnTimer = 0;
+  currentSpawnInterval = 1000;
+  currentBaseSpeed = 300;
+  nextMilestone = 50;
+
+  // Update UI Screens
+  titleScreen.classList.add('hidden');
+  gameOverScreen.classList.add('hidden');
+  updateHUD();
+  updatePlayerPosition();
+
+  // Start the Game Loop
+  lastTime = performance.now();
+  if (animationFrameId) cancelAnimationFrame(animationFrameId);
+  animationFrameId = requestAnimationFrame(gameLoop);
+}
+
+function endGame() {
+  isPlaying = false;
+  cancelAnimationFrame(animationFrameId);
+  
+  // Update and show Game Over screen
+  finalStats.innerHTML = `Score: ${score}<br>Distance: ${Math.floor(timeSurvived * 10)}m`;
+  gameOverScreen.classList.remove('hidden');
+}
+
+function goHome() {
+  gameOverScreen.classList.add('hidden');
+  titleScreen.classList.remove('hidden');
+}
+
+// --- 5. MOVEMENT ---
+function movePlayer(directionOffset) {
+  playerLane += directionOffset;
+  
+  // Clamp player to stay within lanes 0, 1, or 2
+  if (playerLane < 0) playerLane = 0;
+  if (playerLane > 2) playerLane = 2;
+  
+  updatePlayerPosition();
+}
+
+function updatePlayerPosition() {
+  playerEl.style.left = `${LANE_POSITIONS[playerLane]}%`;
+}
+
+/**
+ * --- 6. GAME LOOP ---
+ * The heart of the game. requestAnimationFrame passes the 'currentTime' timestamp.
+ * We subtract 'lastTime' from it to get 'deltaTime' (ms since last frame).
+ * This makes movement and timers time-based instead of frame-based, 
+ * ensuring consistent speeds regardless of the monitor's refresh rate.
+ */
+function gameLoop(currentTime) {
+  if (!isPlaying) return;
+
+  const deltaTime = currentTime - lastTime;
+  lastTime = currentTime;
+
+  update(deltaTime);
+  draw();
+
+  // Check loss condition
+  if (waterMeter <= 0) {
+    waterMeter = 0;
+    updateHUD();
+    endGame();
+    return;
+  }
+
+  // Request next frame
+  animationFrameId = requestAnimationFrame(gameLoop);
+}
+
+// --- 7. CORE UPDATE LOGIC ---
+function update(deltaTime) {
+  // Time progression & passive drain
+  timeSurvived += deltaTime / 1000; // Convert ms to seconds
+  waterMeter -= (4 * deltaTime / 1000); // Drain 4 water per second
+
+  // Difficulty ramp
+  currentSpawnInterval = Math.max(MIN_SPAWN_INTERVAL, 1000 - (timeSurvived * 15));
+  currentBaseSpeed = Math.min(MAX_BASE_SPEED, 300 + (timeSurvived * 6));
+
+  /**
+   * --- SPAWN TIMING LOGIC ---
+   * We accumulate the time passed (deltaTime) into spawnTimer.
+   * When spawnTimer exceeds our threshold (currentSpawnInterval), we trigger a spawn
+   * and subtract the interval. This perfectly ties spawns to the game loop.
+   */
+  spawnTimer += deltaTime;
+  if (spawnTimer >= currentSpawnInterval) {
+    spawnItem();
+    spawnTimer -= currentSpawnInterval;
+  }
+
+  const containerHeight = gameContainer.clientHeight;
+  const playerHeight = 50;
+  const playerBottomOffset = 200; // The CSS 'bottom' value of the player
+  const playerTopY = containerHeight - (playerBottomOffset + playerHeight);
+  const playerBottomY = containerHeight - playerBottomOffset;
+
+  // Move items and check collisions
+  // We iterate backwards through the array to safely remove items as we loop
+  for (let i = items.length - 1; i >= 0; i--) {
+    const item = items[i];
+    
+    // Move item down (speed is pixels per second, so we multiply by delta in seconds)
+    item.y += (currentBaseSpeed * deltaTime / 1000);
+
+    /**
+     * --- COLLISION DETECTION ---
+     * 1. Lane check: We only care if the item is in the same lane as the player.
+     * 2. Y-Axis check (1D AABB): We check if the item's vertical space overlaps the player's.
+     *    - itemScreenY is the top of the item.
+     *    - itemScreenY + 40 is the bottom of the item.
+     *    If the item's bottom is below the player's top, AND the item's top is above the player's bottom = Collision!
+     */
+    const itemTopY = item.y;
+    const itemBottomY = item.y + 40; // item height is 40
+    
+    const isOverlappingY = (itemBottomY > playerTopY) && (itemTopY < playerBottomY);
+
+    if (item.lane === playerLane && isOverlappingY && !item.hit) {
+      item.hit = true;
+      handleCollision(item);
+    }
+
+    // Remove if it goes completely off screen
+    if (item.y > containerHeight) {
+      item.hit = true; 
+      item.element.remove();
+    }
+  }
+
+  // Filter out any items marked as hit to clean up the array
+  items = items.filter(item => !item.hit);
+
+  // Clamp meter
+  if (waterMeter > 100) waterMeter = 100;
+}
+
+// --- 8. DRAWING / RENDERING ---
+function draw() {
+  updateHUD();
+
+  // Update item DOM element positions based on logic array
+  items.forEach(item => {
+    item.element.style.top = `${item.y}px`;
+  });
+}
+
+function updateHUD() {
+  scoreEl.textContent = `Score: ${score}`;
+  distanceEl.textContent = `Distance: ${Math.floor(timeSurvived * 10)}m`;
+  
+  waterMeterFill.style.width = `${waterMeter}%`;
+  
+  // Visual warning if water is low
+  if (waterMeter < 20) {
+    waterMeterFill.style.backgroundColor = 'red';
+  } else {
+    waterMeterFill.style.backgroundColor = 'var(--blue)';
+  }
+
+  // Update tsunami height
+  const tsunamiEl = document.getElementById('tsunami');
+  if (tsunamiEl) {
+    if (waterMeter <= 0) {
+      tsunamiEl.style.height = '100%'; // Consumes screen on death
+    } else {
+      // Scale from 0px up to 200px (touches bottom of player)
+      tsunamiEl.style.height = `${((100 - waterMeter) / 100) * 200}px`;
+    }
+  }
+}
+
+// --- 9. GAME EVENTS ---
+function spawnItem() {
+  const lane = Math.floor(Math.random() * 3); // 0, 1, or 2
+  
+  // 75% chance droplet, 25% chance pipe obstacle
+  const isObstacle = Math.random() < 0.25;
+  const type = isObstacle ? 'pipe' : 'water';
+  
+  // Create DOM element
+  const el = document.createElement('div');
+  el.className = 'item';
+  el.textContent = isObstacle ? '🚧' : '💧';
+  
+  el.style.left = `${LANE_POSITIONS[lane]}%`;
+  el.style.top = '-50px'; // Start slightly above the top edge
+  
+  gameContainer.appendChild(el);
+
+  // Add to active items array
+  items.push({
+    type: type,
+    lane: lane,
+    y: -50,
+    element: el,
+    hit: false
+  });
+}
+
+function handleCollision(item) {
+  // Remove element immediately from screen
+  item.element.remove();
+
+  if (item.type === 'water') {
+    score += 10;
+    waterMeter += 15; // Refill water
+    showFeedback('+10', item.lane, 'var(--blue)');
+    
+    // Check milestones for celebration
+    if (score >= nextMilestone) {
+      showMilestoneFeedback(`${nextMilestone} Points!`);
+      triggerConfetti();
+      nextMilestone += (nextMilestone < 150 ? 50 : 150); // scales up requirements
+    }
+  } else { // Pipe
+    waterMeter -= 20;
+    showFeedback('Ouch!', item.lane, 'red');
+  }
+}
+
+// --- 10. EFFECTS ---
+function showFeedback(text, lane, color) {
+  const el = document.createElement('div');
+  el.className = 'feedback';
+  el.textContent = text;
+  el.style.color = color;
+  
+  el.style.left = `${LANE_POSITIONS[lane]}%`;
+  el.style.bottom = '260px'; // Pop up just above the player
+  
+  gameContainer.appendChild(el);
+  
+  setTimeout(() => el.remove(), 1000);
+}
+
+function showMilestoneFeedback(text) {
+  const el = document.createElement('div');
+  el.className = 'feedback feedback-milestone';
+  el.textContent = text;
+  
+  gameContainer.appendChild(el);
+  
+  setTimeout(() => el.remove(), 2000);
+}
+
+function triggerConfetti() {
+  for (let i = 0; i < 20; i++) {
+    const el = document.createElement('div');
+    el.className = 'confetti';
+    
+    // Randomize position near center
+    const left = 30 + (Math.random() * 40); 
+    el.style.left = `${left}%`;
+    el.style.top = '30%';
+    
+    el.style.backgroundColor = Math.random() > 0.5 ? 'var(--blue)' : 'var(--yellow)';
+    
+    // Randomize duration and rotation slightly
+    const duration = 1.5 + Math.random();
+    el.style.animationDuration = `${duration}s`;
+    
+    gameContainer.appendChild(el);
+    setTimeout(() => el.remove(), duration * 1000);
+  }
+}
+
+// Boot the game
+init();
+</script>
+</body>
+</html>
